@@ -2,10 +2,13 @@
 
 A Chrome/Edge (Manifest V3) extension that supercharges the **UGV Student Portal → Results** page with:
 
-- 📈 **Trend** — semester-wise GPA line chart, CGPA/credits summary, and a ranked list of the subjects that would lift your CGPA the most.
-- 🧪 **What-If simulator** — change any subject's grade from a dropdown and watch your CGPA recompute live.
+- 📈 **Trend** — semester-wise GPA line chart, CGPA/credits summary, a ranked list of the subjects that would lift your CGPA the most, and a **grade distribution** breakdown.
+- 🧪 **What-If simulator** — change any subject's grade from a dropdown and watch your CGPA recompute live; **search** to find a subject fast.
 - 🎯 **Target planner** — enter a goal CGPA and get the fewest, lightest grade improvements (retakes) needed to reach it — or told it's out of reach and the max you can hit.
+- 🔮 **Forecast** — **safe / target / reach** projections for your in-progress subjects, plus a *"what GPA do I need next semester?"* calculator for any goal CGPA and credit load.
 - 📄 **PDF grade sheet** — one click opens a clean, print-optimized sheet; use the browser's *Save as PDF*.
+- 📊 **CSV export** — download every course + grade point for your own spreadsheets.
+- 🌗 **Theme-aware** — the panel follows the portal's own light/dark mode automatically.
 
 ## How the grades are scored
 
