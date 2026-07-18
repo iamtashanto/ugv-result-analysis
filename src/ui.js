@@ -344,13 +344,11 @@
       run();
     }
 
-    // ---- Forecast view: safe/target/reach + next-semester GPA needed -----
     function renderForecast() {
       const view = q('[data-view="forecast"]');
       const ungraded = A().ungradedCourses(model);
       const cur = A().cgpa(model);
 
-      // Three named scenarios for the in-progress subjects.
       const SCEN = [
         { key: "safe", label: "Safe", grade: "C", hint: "just passing" },
         { key: "target", label: "Target", grade: "B+", hint: "solid" },
@@ -365,7 +363,6 @@
            <p class="ug-note">${ungraded.map((c) => esc(c.code)).join(", ")} — ${ungraded.reduce((s, c) => s + c.credit, 0)} credits pending.</p>`
         : `<div class="ug-ok">✅ No in-progress subjects — every graded course is final.</div>`;
 
-      // Next-semester projector.
       view.innerHTML = `
         ${scenHtml}
         <h4 class="ug-h4">GPA needed next semester</h4>
