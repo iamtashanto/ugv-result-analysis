@@ -92,12 +92,27 @@
     const base = weighted(model.courses, model.scale);
     const totalCredits = base.credits || 1;
     return model.courses
-      .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
-      .map((c) => ({
-        ...c,
-        roi: (c.credit * (maxPoint - c.point)) / totalCredits,
-      }))
-      .sort((a, b) => b.roi - a.roi);
+      .filter((c) => {
+        const isLetter = c.letter && c.point != null && c.point < maxPoint;
+        const isIncomplete = c.kind === "incomplete";
+        return (isLetter || isIncomplete) && c.credit > 0;
+      })
+      .map((c) => {
+        const oldP = c.point || 0;
+        const isNewCred = c.point == null;
+        const gain = isNewCred ? c.credit * (maxPoint - base.gpa) : c.credit * (maxPoint - oldP);
+        return {
+          ...c,
+          roi: gain / totalCredits,
+        };
+      })
+      .filter((c) => c.roi > 1e-9)
+      .sort((a, b) => {
+        const aInc = a.kind === "incomplete";
+        const bInc = b.kind === "incomplete";
+        if (aInc !== bInc) return aInc ? -1 : 1;
+        return b.roi - a.roi;
+      });
   }
 
   function planForTarget(model, targetCgpa, opts) {
