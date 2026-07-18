@@ -59,6 +59,16 @@
       isGraded(letter) {
         return this.pointFor(letter) !== null;
       },
+      // A standard, improvable letter grade (A+ … F) — NOT pass/fail markers
+      // like COMPETENT, I (Incomplete), W. Those are shown but never used as
+      // simulation/retake targets.
+      isLetter(letter) {
+        return GRADE_ORDER.includes(normalizeLetter(letter));
+      },
+      // Only the standard letter grades, richest first — for planners/dropdowns.
+      letterGrades() {
+        return GRADE_ORDER.slice();
+      },
       // Grades available for what-if selection, richest first.
       grades() {
         const set = new Set(GRADE_ORDER);

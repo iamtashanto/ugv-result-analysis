@@ -105,5 +105,35 @@ const csv = Analysis.toCsv(model);
 eq("csv has header", csv.startsWith("Semester,Code,Title,Credit,Grade,GradePoint"), true);
 eq("csv mentions CGPA", /CGPA/.test(csv), true);
 
+// --- Special grades (COMPETENT / Incomplete) must NOT be treated as letters
+const scale2 = GradeScale.createScale();
+[["A+", 4.0], ["B", 3.0], ["F", 0.0], ["COMPETENT", 4.0]].forEach(([g, p]) => scale2.learn(g, p));
+eq("COMPETENT is not a letter grade", scale2.isLetter("COMPETENT"), false);
+eq("F is a letter grade", scale2.isLetter("F"), true);
+
+const model2 = Analysis.buildModel(
+  {
+    student: { name: "T", id: "2", department: "CSE" },
+    reportedCgpa: null,
+    semesters: [
+      { label: "1st", order: 1, withheld: false, courses: [
+        { code: "CSE1", title: "A", credit: 3, grade: "F", gpa: 0.0, graded: true },
+        { code: "TRN1", title: "Training", credit: 2, grade: "COMPETENT", gpa: 4.0, graded: true },
+        { code: "INC1", title: "Incomplete", credit: 3, grade: "I", gpa: null, graded: true },
+        { code: "CSE2", title: "B", credit: 3, grade: "B", gpa: 3.0, graded: true },
+      ] },
+    ],
+  },
+  scale2
+);
+const recs2 = Analysis.recommendations(model2);
+eq("recs exclude COMPETENT/I", recs2.every((r) => ["F", "B"].includes(r.grade)), true);
+eq("only the F and B are improvable", recs2.length, 2);
+
+const plan2 = Analysis.planForTarget(model2, 3.0);
+const usesOnlyLetters = plan2.steps.every((s) => GradeScale.GRADE_ORDER.includes(s.toGrade));
+eq("plan never targets COMPETENT", usesOnlyLetters, true);
+eq("plan only improves letter-graded subjects", plan2.steps.every((s) => ["CSE1", "CSE2"].includes(s.code)), true);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

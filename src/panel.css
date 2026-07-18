@@ -36,6 +36,26 @@
   font: 14px/1.5 "Inter", "Segoe UI", sans-serif;
 }
 .ug-panel.is-open { transform: translateX(0); }
+.ug-panel.ug-resizing { transition: none; user-select: none; }
+
+/* Left-edge resize grip */
+.ug-resize {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 5;
+}
+.ug-resize::before {
+  content: "";
+  position: absolute;
+  left: 2px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 42px;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+.ug-resize:hover::before { background: #144d9b; }
 
 .ug-head {
   display: flex;
@@ -116,6 +136,17 @@
 .ug-table .ug-num { text-align: right; }
 .ug-tt { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ug-select { border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.2rem 0.35rem; font-size: 12px; background: #fff; }
+.ug-select.is-changed { border-color: #16a34a; background: #f0fdf4; font-weight: 700; }
+
+/* Semester sub-header row inside the What-If table */
+.ug-semrow td {
+  background: #f1f5f9; font-weight: 700; font-size: 11px; color: #144d9b;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 0.4rem 0.6rem;
+  position: sticky; top: 26px;
+}
+.ug-lock { display: inline-block; font-size: 11px; font-weight: 600; color: #64748b; background: #f1f5f9; border-radius: 5px; padding: 0.1rem 0.45rem; }
+.ug-lock--warn { background: #fee2e2; color: #b91c1c; font-size: 9px; }
+.ug-w100 { width: 100%; justify-content: center; margin-top: 0.75rem; }
 
 .ug-targetbar { display: flex; align-items: center; gap: 0.5rem; }
 .ug-targetbar label { font-size: 12px; color: #334155; font-weight: 600; }
@@ -166,3 +197,6 @@
 .ug-panel.ug-dark .ug-grid { stroke: #1e293b; }
 .ug-panel.ug-dark .ug-distbar { background: #1e293b; }
 .ug-panel.ug-dark .ug-sub, .ug-panel.ug-dark .ug-scenhint, .ug-panel.ug-dark .ug-scengrade { color: #94a3b8; }
+.ug-panel.ug-dark .ug-semrow td { background: #172033; color: #93c5fd; }
+.ug-panel.ug-dark .ug-lock { background: #1e293b; color: #cbd5e1; }
+.ug-panel.ug-dark .ug-select.is-changed { background: #052e16; }

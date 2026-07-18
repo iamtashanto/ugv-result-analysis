@@ -24,6 +24,9 @@
           gpa: c.gpa,
           graded: c.graded,
           point: c.graded ? scale.pointFor(c.grade) : null,
+          // Standard letter grade (A+…F) => can be simulated / improved.
+          // COMPETENT, I (Incomplete), W etc. are locked pass/fail markers.
+          letter: c.graded && scale.isLetter(c.grade),
         });
       });
     });
@@ -67,7 +70,7 @@
     const base = weighted(model.courses, model.scale);
     const totalCredits = base.credits || 1;
     return model.courses
-      .filter((c) => c.graded && c.credit > 0 && c.point != null && c.point < maxPoint)
+      .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
       .map((c) => ({
         ...c,
         roi: (c.credit * (maxPoint - c.point)) / totalCredits, // max CGPA lift
@@ -87,9 +90,10 @@
     const totalCredits = base.credits;
     const current = base.gpa;
 
-    // Capacity of each improvable course, richest first.
+    // Capacity of each improvable course, richest first. Only standard
+    // letter-graded courses are retakeable — pass/fail markers are skipped.
     const improvable = model.courses
-      .filter((c) => c.graded && c.credit > 0 && c.point != null && c.point < maxPoint)
+      .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
       .map((c) => ({ course: c, capacity: c.credit * (maxPoint - c.point) }))
       .sort((a, b) => b.capacity - a.capacity);
 
@@ -107,7 +111,7 @@
       return { feasible: false, current: round2(current), target: targetCgpa, maxReachable: round2(maxReachable), steps: [] };
     }
 
-    const grades = scale.grades(); // best -> worst
+    const grades = scale.letterGrades(); // standard A+ … F only, best -> worst
     const steps = [];
     const overrides = {};
     for (const item of improvable) {
@@ -167,7 +171,7 @@
   function gradeDistribution(model) {
     const map = {};
     model.courses.forEach((c) => {
-      if (!c.graded || c.credit <= 0) return;
+      if (!c.letter || c.credit <= 0) return;
       const g = model.scale.normalizeLetter(c.grade);
       (map[g] = map[g] || { grade: g, count: 0, credits: 0 }).count++;
       map[g].credits += c.credit;

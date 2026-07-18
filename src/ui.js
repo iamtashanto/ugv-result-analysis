@@ -34,6 +34,7 @@
     document.getElementById("ug-fab")?.remove();
 
     const overrides = {};
+    let lastPlan = null; // most recent feasible target plan, for PDF export
 
     // Floating launcher
     const fab = el("button", "ug-fab", '<i class="bi bi-graph-up-arrow"></i> Analyze');
@@ -45,6 +46,7 @@
     const panel = el("aside", "ug-panel");
     panel.id = "ug-panel";
     panel.innerHTML = `
+      <div class="ug-resize" data-resize title="Drag to resize · double-click to expand"></div>
       <header class="ug-head">
         <div><strong>Result Analysis</strong><span class="ug-sub">${esc(model.parsed.student.name || "")}</span></div>
         <div class="ug-head-actions">
@@ -82,11 +84,41 @@
     const close = () => panel.classList.remove("is-open");
     fab.addEventListener("click", open);
 
+    // --- Resizable width (drag the left edge; double-click to expand) -----
+    const MINW = 340;
+    const maxW = () => Math.round(window.innerWidth * 0.95);
+    let savedW = parseInt(localStorage.getItem("ugv:panelW") || "0", 10);
+    if (savedW >= MINW) panel.style.width = Math.min(savedW, maxW()) + "px";
+    const setW = (w) => {
+      const clamped = Math.max(MINW, Math.min(w, maxW()));
+      panel.style.width = clamped + "px";
+      localStorage.setItem("ugv:panelW", String(clamped));
+    };
+    const handle = q("[data-resize]");
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      panel.classList.add("ug-resizing");
+      const move = (ev) => setW(window.innerWidth - ev.clientX);
+      const up = () => {
+        panel.classList.remove("ug-resizing");
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+    handle.addEventListener("dblclick", () => {
+      const cur = panel.getBoundingClientRect().width;
+      setW(cur < maxW() - 40 ? maxW() : 440);
+    });
+
     panel.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "close") return close();
       if (act === "pdf") return NS.Pdf.openGradeSheet(model);
       if (act === "csv") return downloadCsv();
+      if (act === "planpdf") return lastPlan && NS.Pdf.openPlanSheet(model, lastPlan);
       const tab = e.target.closest("[data-tab]")?.dataset.tab;
       if (tab) {
         panel.querySelectorAll(".ug-tab").forEach((t) => t.classList.toggle("is-active", t.dataset.tab === tab));
@@ -144,19 +176,37 @@
     // ---- What-If view ---------------------------------------------------
     function renderWhatIf() {
       const view = q('[data-view="whatif"]');
-      const grades = model.scale.grades();
-      const rows = model.courses
-        .filter((c) => c.credit > 0)
-        .map((c) => {
+      const grades = model.scale.letterGrades();
+
+      // Grade cell: an editable dropdown for standard letter grades, or a
+      // locked chip for pass/fail markers (COMPETENT, I) and blanks.
+      const gradeCell = (c) => {
+        if (c.letter) {
           const opts = grades
-            .map((g) => `<option value="${g}"${g === c.grade ? " selected" : ""}>${g}</option>`)
+            .map((g) => `<option value="${g}"${g === model.scale.normalizeLetter(c.grade) ? " selected" : ""}>${g}</option>`)
             .join("");
-          return `<tr data-id="${c.id}">
-            <td class="ug-code">${esc(c.code)}</td>
-            <td class="ug-tt" title="${esc(c.title)}">${esc(c.title)}</td>
-            <td class="ug-num">${c.credit}</td>
-            <td><select class="ug-select" data-id="${c.id}"${c.graded ? "" : ""}>${c.graded ? "" : '<option value="">—</option>'}${opts}</select></td>
-          </tr>`;
+          return `<select class="ug-select" data-id="${c.id}">${opts}</select>`;
+        }
+        return `<span class="ug-lock" title="Not a standard graded course">${esc(c.grade || "—")}</span>`;
+      };
+
+      // Rows grouped under a per-semester header.
+      const rows = model.parsed.semesters
+        .map((sem, si) => {
+          const semCourses = model.courses.filter((c) => c.semIndex === si && c.credit > 0);
+          if (!semCourses.length) return "";
+          const head = `<tr class="ug-semrow" data-sem="${si}"><td colspan="4">${esc(sem.label)}${sem.withheld ? ' <span class="ug-lock ug-lock--warn">Withheld</span>' : ""}</td></tr>`;
+          const body = semCourses
+            .map(
+              (c) => `<tr data-id="${c.id}" data-sem="${si}">
+                <td class="ug-code">${esc(c.code)}</td>
+                <td class="ug-tt" title="${esc(c.title)}">${esc(c.title)}</td>
+                <td class="ug-num">${c.credit}</td>
+                <td>${gradeCell(c)}</td>
+              </tr>`
+            )
+            .join("");
+          return head + body;
         })
         .join("");
       view.innerHTML = `
@@ -171,10 +221,16 @@
       const search = view.querySelector("[data-search]");
       search.addEventListener("input", () => {
         const term = search.value.trim().toLowerCase();
-        view.querySelectorAll("tbody tr").forEach((tr) => {
+        const shown = {};
+        view.querySelectorAll("tbody tr[data-id]").forEach((tr) => {
           const c = model.courses.find((x) => x.id === tr.dataset.id);
           const hit = !term || (c.code + " " + c.title).toLowerCase().includes(term);
           tr.hidden = !hit;
+          if (hit) shown[tr.dataset.sem] = true;
+        });
+        // Hide a semester header when none of its courses match.
+        view.querySelectorAll("tr.ug-semrow").forEach((tr) => {
+          tr.hidden = !!term && !shown[tr.dataset.sem];
         });
       });
 
@@ -191,8 +247,9 @@
       view.querySelectorAll(".ug-select").forEach((sel) => {
         sel.addEventListener("change", () => {
           const c = model.courses.find((x) => x.id === sel.dataset.id);
-          if (sel.value === c.grade) delete overrides[sel.dataset.id];
+          if (sel.value === model.scale.normalizeLetter(c.grade)) delete overrides[sel.dataset.id];
           else overrides[sel.dataset.id] = sel.value;
+          sel.classList.toggle("is-changed", !!overrides[sel.dataset.id]);
           recompute();
         });
       });
@@ -200,7 +257,8 @@
         Object.keys(overrides).forEach((k) => delete overrides[k]);
         view.querySelectorAll(".ug-select").forEach((sel) => {
           const c = model.courses.find((x) => x.id === sel.dataset.id);
-          sel.value = c.grade || "";
+          sel.value = model.scale.normalizeLetter(c.grade);
+          sel.classList.remove("is-changed");
         });
         recompute();
       });
@@ -223,6 +281,7 @@
       const run = () => {
         const t = parseFloat(view.querySelector("[data-target]").value);
         const out = view.querySelector("[data-planout]");
+        lastPlan = null;
         if (isNaN(t)) { out.innerHTML = ""; return; }
         const plan = A().planForTarget(model, t);
         if (plan.alreadyMet) {
@@ -233,9 +292,11 @@
           out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable by improving existing subjects. Max reachable is <b>${fmt(plan.maxReachable)}</b> (all subjects → A+).</div>`;
           return;
         }
+        lastPlan = plan;
         out.innerHTML = `
           <div class="ug-ok">Reach <b>${fmt(plan.resultCgpa)}</b> by improving ${plan.steps.length} subject${plan.steps.length > 1 ? "s" : ""}:</div>
-          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> → <b class="ug-badge ug-badge--ok">${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>`;
+          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> → <b class="ug-badge ug-badge--ok">${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
+          <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan as PDF</button>`;
       };
       view.querySelector("[data-plan]").addEventListener("click", run);
       view.querySelector("[data-target]").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });

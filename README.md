@@ -3,12 +3,14 @@
 A Chrome/Edge (Manifest V3) extension that supercharges the **UGV Student Portal → Results** page with:
 
 - 📈 **Trend** — semester-wise GPA line chart, CGPA/credits summary, a ranked list of the subjects that would lift your CGPA the most, and a **grade distribution** breakdown.
-- 🧪 **What-If simulator** — change any subject's grade from a dropdown and watch your CGPA recompute live; **search** to find a subject fast.
-- 🎯 **Target planner** — enter a goal CGPA and get the fewest, lightest grade improvements (retakes) needed to reach it — or told it's out of reach and the max you can hit.
+- 🧪 **What-If simulator** — change any subject's grade from a dropdown (grouped by semester) and watch your CGPA recompute live; changed subjects are highlighted, and you can **search** to find one fast.
+- 🎯 **Target planner** — enter a goal CGPA and get the fewest, lightest grade improvements (retakes) needed to reach it — or told it's out of reach and the max you can hit. **Export the plan as a PDF**.
 - 🔮 **Forecast** — **safe / target / reach** projections for your in-progress subjects, plus a *"what GPA do I need next semester?"* calculator for any goal CGPA and credit load.
 - 📄 **PDF grade sheet** — one click opens a clean, print-optimized sheet; use the browser's *Save as PDF*.
 - 📊 **CSV export** — download every course + grade point for your own spreadsheets.
-- 🌗 **Theme-aware** — the panel follows the portal's own light/dark mode automatically.
+- 🌗 **Theme-aware & resizable** — the panel follows the portal's own light/dark mode, and you can drag its left edge to resize (double-click to expand full-width). Width is remembered.
+
+Pass/fail markers such as **COMPETENT** and **I (Incomplete)** are shown but never treated as improvable letter grades, so the planner and simulator only suggest real A+…F retakes.
 
 ## How the grades are scored
 
