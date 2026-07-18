@@ -58,7 +58,7 @@
     model.parsed.semesters.forEach((sem, si) => {
       const courses = model.courses.filter((c) => c.semIndex === si);
       const w = weighted(courses, model.scale, overrides);
-      bySem[si] = { label: sem.label, order: sem.order, withheld: sem.withheld, ...w };
+      bySem[si] = { index: si, label: sem.label, order: sem.order, withheld: sem.withheld, ...w };
     });
     return Object.values(bySem).sort((a, b) => a.order - b.order);
   }
@@ -183,6 +183,22 @@
     );
   }
 
+  // "If you raised your weakest N subjects to `toGrade`, CGPA becomes…".
+  // Returns { cgpa, gain, courses:[{code,title,fromGrade}] }.
+  function improveTop(model, n, toGrade) {
+    const grade = toGrade || "A+";
+    const picks = recommendations(model).slice(0, n);
+    const overrides = {};
+    picks.forEach((c) => (overrides[c.id] = grade));
+    const after = round2(cgpa(model, overrides));
+    return {
+      cgpa: after,
+      toGrade: grade,
+      gain: round2(after - cgpa(model)),
+      courses: picks.map((c) => ({ code: c.code, title: c.title, fromGrade: c.grade })),
+    };
+  }
+
   /**
    * GPA required in a future semester of `plannedCredits` credits to reach
    * `targetCgpa`. Returns { requiredGpa, feasible, current, plannedCredits }.
@@ -222,7 +238,7 @@
 
   NS.Analysis = {
     buildModel, weighted, cgpa, semesterGpas, recommendations, planForTarget,
-    ungradedCourses, scenario, gradeDistribution, requiredNextGpa, toCsv,
+    ungradedCourses, scenario, gradeDistribution, requiredNextGpa, toCsv, improveTop,
     round2, MAX_POINT,
   };
 })(window);

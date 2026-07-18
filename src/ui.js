@@ -66,7 +66,8 @@
         <section class="ug-view" data-view="whatif" hidden></section>
         <section class="ug-view" data-view="target" hidden></section>
         <section class="ug-view" data-view="forecast" hidden></section>
-      </div>`;
+      </div>
+      <footer class="ug-credit">Developed by <a href="https://tashanto.com" target="_blank" rel="noopener">Shanto · tashanto.com</a></footer>`;
     document.body.appendChild(panel);
 
     // Follow the portal's own light/dark theme (body.dark), live.
@@ -195,7 +196,7 @@
         .map((sem, si) => {
           const semCourses = model.courses.filter((c) => c.semIndex === si && c.credit > 0);
           if (!semCourses.length) return "";
-          const head = `<tr class="ug-semrow" data-sem="${si}"><td colspan="4">${esc(sem.label)}${sem.withheld ? ' <span class="ug-lock ug-lock--warn">Withheld</span>' : ""}</td></tr>`;
+          const head = `<tr class="ug-semrow" data-sem="${si}"><td colspan="4"><span>${esc(sem.label)}${sem.withheld ? ' <span class="ug-lock ug-lock--warn">Withheld</span>' : ""}</span><span class="ug-semgpa" data-semgpa="${si}"></span></td></tr>`;
           const body = semCourses
             .map(
               (c) => `<tr data-id="${c.id}" data-sem="${si}">
@@ -242,6 +243,11 @@
         const dEl = q('[data-live="delta"]');
         dEl.textContent = (d >= 0 ? "▲ +" : "▼ ") + d.toFixed(2);
         dEl.className = "ug-delta " + (Math.abs(d) < 0.005 ? "" : d > 0 ? "up" : "down");
+        // Live per-semester GPA in each header row.
+        A().semesterGpas(model, overrides).forEach((s) => {
+          const cell = view.querySelector(`[data-semgpa="${s.index}"]`);
+          if (cell) cell.textContent = "GPA " + fmt(s.gpa);
+        });
         renderTrend();
       };
       view.querySelectorAll(".ug-select").forEach((sel) => {
@@ -269,13 +275,17 @@
     function renderTarget() {
       const view = q('[data-view="target"]');
       const cur = A().cgpa(model);
+      const pot3 = A().improveTop(model, 3, "A+");
+      const presets = [3.0, 3.25, 3.5, 3.75].filter((p) => p > cur + 0.001);
       view.innerHTML = `
         <div class="ug-targetbar">
           <label>Target CGPA</label>
           <input type="number" class="ug-input" min="0" max="4" step="0.01" value="${(Math.min(4, cur + 0.2)).toFixed(2)}" data-target>
           <button class="ug-btn" data-plan>Plan</button>
         </div>
-        <p class="ug-note">Current CGPA <b>${fmt(cur)}</b>. Planner picks the fewest, lightest grade improvements (retakes) to reach your goal.</p>
+        ${presets.length ? `<div class="ug-presets">${presets.map((p) => `<button class="ug-chip" data-preset="${p}">${p.toFixed(2)}</button>`).join("")}</div>` : ""}
+        <p class="ug-note">Current CGPA <b>${fmt(cur)}</b>. The planner shows the exact grade you need in each subject (the <em>minimum</em> that reaches your goal).</p>
+        ${pot3.courses.length ? `<div class="ug-pot"><i class="bi bi-stars"></i> Improving your weakest <b>${pot3.courses.length}</b> subject${pot3.courses.length > 1 ? "s" : ""} to A+ could lift CGPA to <b>${fmt(pot3.cgpa)}</b> <span class="ug-lift">(+${pot3.gain.toFixed(2)})</span>.</div>` : ""}
         <div data-planout></div>`;
 
       const run = () => {
@@ -285,7 +295,7 @@
         if (isNaN(t)) { out.innerHTML = ""; return; }
         const plan = A().planForTarget(model, t);
         if (plan.alreadyMet) {
-          out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}).</div>`;
+          out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}). Aim higher!</div>`;
           return;
         }
         if (!plan.feasible) {
@@ -293,13 +303,22 @@
           return;
         }
         lastPlan = plan;
+        // Subjects NOT used in this plan but still improvable — swap-in options.
+        const usedCodes = new Set(plan.steps.map((s) => s.code));
+        const alts = A().recommendations(model).filter((r) => !usedCodes.has(r.code)).slice(0, 3);
         out.innerHTML = `
-          <div class="ug-ok">Reach <b>${fmt(plan.resultCgpa)}</b> by improving ${plan.steps.length} subject${plan.steps.length > 1 ? "s" : ""}:</div>
-          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> → <b class="ug-badge ug-badge--ok">${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
+          <div class="ug-ok">Reach <b>${fmt(plan.resultCgpa)}</b> by improving these ${plan.steps.length} subject${plan.steps.length > 1 ? "s" : ""} — get at least the grade shown:</div>
+          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
+          ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Or swap in one of these instead:</span>${alts.map((r) => `<span class="ug-alt"><b class="ug-code">${esc(r.code)}</b> ${esc(r.title)} <b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></span>`).join("")}</div>` : ""}
           <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan as PDF</button>`;
       };
       view.querySelector("[data-plan]").addEventListener("click", run);
       view.querySelector("[data-target]").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+      view.querySelectorAll("[data-preset]").forEach((b) =>
+        b.addEventListener("click", () => {
+          view.querySelector("[data-target]").value = b.dataset.preset;
+          run();
+        }));
       run();
     }
 

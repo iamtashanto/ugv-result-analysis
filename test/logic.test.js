@@ -135,5 +135,14 @@ const usesOnlyLetters = plan2.steps.every((s) => GradeScale.GRADE_ORDER.includes
 eq("plan never targets COMPETENT", usesOnlyLetters, true);
 eq("plan only improves letter-graded subjects", plan2.steps.every((s) => ["CSE1", "CSE2"].includes(s.code)), true);
 
+// improveTop: raising the weakest subjects to A+ lifts CGPA
+const pot = Analysis.improveTop(model2, 2, "A+");
+eq("improveTop returns 2 courses", pot.courses.length, 2);
+eq("improveTop cgpa >= current", pot.cgpa >= Analysis.cgpa(model2), true);
+eq("improveTop gain positive", pot.gain > 0, true);
+
+// semesterGpas carries the original semester index (for live UI updates)
+eq("semesterGpas has index", Analysis.semesterGpas(model).every((s, i) => typeof s.index === "number"), true);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
