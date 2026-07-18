@@ -29,7 +29,7 @@
               <td>${esc(c.title)}</td>
               <td class="num">${c.credit || "—"}</td>
               <td class="ctr">${esc(c.grade || "—")}</td>
-              <td class="num">${c.graded && c.gpa != null ? c.gpa.toFixed(2) : "—"}</td>
+              <td class="num">${c.letter && c.point != null ? c.point.toFixed(2) : "—"}</td>
             </tr>`
           )
           .join("");

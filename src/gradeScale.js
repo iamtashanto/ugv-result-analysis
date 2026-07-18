@@ -24,6 +24,11 @@
   // Ordered best -> worst, used to build simulator dropdowns.
   const GRADE_ORDER = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "D", "F"];
 
+  // Non-GPA "pass" markers: shown, locked, and excluded from GPA entirely.
+  const PASS_SET = new Set(["COMPETENT", "PASS", "P", "S", "W", "EXEMPT", "EXEMPTED", "CT"]);
+  // Incomplete / not-yet-taken: excluded from GPA but editable (simulatable).
+  const INCOMPLETE_SET = new Set(["I", "INC", "INCOMPLETE"]);
+
   function normalizeLetter(raw) {
     if (raw == null) return "";
     return String(raw)
@@ -69,6 +74,17 @@
       letterGrades() {
         return GRADE_ORDER.slice();
       },
+      // Classify a grade: 'letter' (A+…F, counts + editable),
+      // 'incomplete' (I — no result yet, editable, non-GPA),
+      // 'pass' (COMPETENT etc. — locked, non-GPA), or 'blank' (empty, editable).
+      gradeKind(letter) {
+        const k = normalizeLetter(letter);
+        if (!k || k === "-") return "blank";
+        if (GRADE_ORDER.includes(k)) return "letter";
+        if (INCOMPLETE_SET.has(k)) return "incomplete";
+        if (PASS_SET.has(k)) return "pass";
+        return "pass"; // unknown non-letter -> lock it, don't count in GPA
+      },
       // Grades available for what-if selection, richest first.
       grades() {
         const set = new Set(GRADE_ORDER);
@@ -82,5 +98,5 @@
   }
 
   root.UGVResult = root.UGVResult || {};
-  root.UGVResult.GradeScale = { createScale, DEFAULT_SCALE, GRADE_ORDER, normalizeLetter };
+  root.UGVResult.GradeScale = { createScale, DEFAULT_SCALE, GRADE_ORDER, PASS_SET, INCOMPLETE_SET, normalizeLetter };
 })(window);

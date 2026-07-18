@@ -141,14 +141,16 @@
 /* Semester sub-header row inside the What-If table */
 .ug-semrow td {
   background: #f1f5f9; font-weight: 700; font-size: 11px; color: #144d9b;
-  text-transform: uppercase; letter-spacing: 0.04em; padding: 0.4rem 0.6rem;
-  position: sticky; top: 26px;
+  letter-spacing: 0.03em; padding: 0.4rem 0.6rem; position: sticky; top: 26px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.5rem; white-space: nowrap;
 }
-.ug-semrow td { display: flex; align-items: center; justify-content: space-between; }
-.ug-semgpa { font-size: 10px; color: #64748b; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.ug-semlabel { display: inline-flex; align-items: center; gap: 0.4rem; text-transform: uppercase; }
+.ug-semgpa { font-size: 10.5px; color: #64748b; font-weight: 600; text-transform: none; letter-spacing: 0; white-space: nowrap; }
 .ug-semgpa b { color: #144d9b; }
 .ug-semgpa .ug-up { color: #16a34a; }
 .ug-semgpa .ug-down { color: #dc2626; }
+.ug-select--pending { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
 .ug-lock { display: inline-block; font-size: 11px; font-weight: 600; color: #64748b; background: #f1f5f9; border-radius: 5px; padding: 0.1rem 0.45rem; }
 .ug-lock--warn { background: #fee2e2; color: #b91c1c; font-size: 9px; }
 .ug-w100 { width: 100%; justify-content: center; margin-top: 0.75rem; }
@@ -167,9 +169,14 @@
 .ug-chip:hover { border-color: #144d9b; color: #144d9b; }
 .ug-pot { display: flex; align-items: center; gap: 0.45rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px; padding: 0.55rem 0.75rem; font-size: 12.5px; color: #166534; margin-bottom: 0.6rem; }
 .ug-pot i { color: #16a34a; }
-.ug-alts { margin-top: 0.6rem; padding: 0.6rem 0.7rem; border: 1px dashed #cbd5e1; border-radius: 10px; display: flex; flex-direction: column; gap: 0.35rem; }
+.ug-alts { margin-top: 0.6rem; padding: 0.6rem 0.7rem; border: 1px dashed #cbd5e1; border-radius: 10px; display: flex; flex-direction: column; gap: 0.4rem; }
 .ug-alts__title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
-.ug-alt { font-size: 12px; color: #334155; }
+.ug-alts__title small { font-weight: 500; text-transform: none; letter-spacing: 0; color: #94a3b8; }
+.ug-alttable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ug-alttable th { text-align: left; font-size: 9px; text-transform: uppercase; color: #94a3b8; padding: 0.25rem 0.4rem; border-bottom: 1px solid #e2e8f0; }
+.ug-alttable td { padding: 0.3rem 0.4rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.ug-alttable td.ctr, .ug-alttable th:nth-child(n+2) { text-align: center; }
+.ug-alttable .ug-tt { max-width: 120px; display: inline-block; vertical-align: bottom; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #475569; }
 .ug-move i { color: #94a3b8; }
 
 /* Developer credit footer */
@@ -225,6 +232,8 @@
 .ug-panel.ug-dark .ug-chip { background: #1e293b; color: #cbd5e1; border-color: #334155; }
 .ug-panel.ug-dark .ug-pot { background: #052e16; border-color: #14532d; color: #86efac; }
 .ug-panel.ug-dark .ug-alts { border-color: #334155; }
-.ug-panel.ug-dark .ug-alt { color: #cbd5e1; }
+.ug-panel.ug-dark .ug-alttable td { border-color: #1e293b; }
+.ug-panel.ug-dark .ug-alttable .ug-tt { color: #94a3b8; }
+.ug-panel.ug-dark .ug-select--pending { background: #422006; color: #fbbf24; border-color: #78350f; }
 .ug-panel.ug-dark .ug-credit { background: #0b1220; border-color: #1e293b; }
 .ug-panel.ug-dark .ug-credit a { color: #93c5fd; }

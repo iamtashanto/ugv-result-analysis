@@ -179,8 +179,11 @@
       const view = q('[data-view="whatif"]');
       const grades = model.scale.letterGrades();
 
-      // Grade cell: an editable dropdown for standard letter grades, or a
-      // locked chip for pass/fail markers (COMPETENT, I) and blanks.
+      // Grade cell:
+      //   letter grade      -> dropdown, current grade selected
+      //   incomplete/blank  -> dropdown defaulting to "not taken", so the user
+      //                        can simulate a grade for an exam they'll sit
+      //   pass (COMPETENT)  -> locked chip (non-GPA, already passed)
       const gradeCell = (c) => {
         if (c.letter) {
           const opts = grades
@@ -188,15 +191,21 @@
             .join("");
           return `<select class="ug-select" data-id="${c.id}">${opts}</select>`;
         }
-        return `<span class="ug-lock" title="Not a standard graded course">${esc(c.grade || "—")}</span>`;
+        if (c.editable) {
+          // Incomplete / not-yet-taken — offer a grade to project.
+          const label = c.kind === "incomplete" ? "I · not taken" : "not taken";
+          const opts = grades.map((g) => `<option value="${g}">${g}</option>`).join("");
+          return `<select class="ug-select ug-select--pending" data-id="${c.id}"><option value="" selected>${label}</option>${opts}</select>`;
+        }
+        return `<span class="ug-lock" title="Pass / non-GPA course (not counted)">${esc(c.grade || "—")}</span>`;
       };
 
-      // Rows grouped under a per-semester header.
+      // Rows grouped under a per-semester header (single line: label + GPA).
       const rows = model.parsed.semesters
         .map((sem, si) => {
           const semCourses = model.courses.filter((c) => c.semIndex === si && c.credit > 0);
           if (!semCourses.length) return "";
-          const head = `<tr class="ug-semrow" data-sem="${si}"><td colspan="4"><span>${esc(sem.label)}${sem.withheld ? ' <span class="ug-lock ug-lock--warn">Withheld</span>' : ""}</span><span class="ug-semgpa" data-semgpa="${si}"></span></td></tr>`;
+          const head = `<tr class="ug-semrow" data-sem="${si}"><td colspan="4"><span class="ug-semlabel">${esc(sem.label)}${sem.withheld ? ' <span class="ug-lock ug-lock--warn">Withheld</span>' : ""}</span><span class="ug-semgpa" data-semgpa="${si}"></span></td></tr>`;
           const body = semCourses
             .map(
               (c) => `<tr data-id="${c.id}" data-sem="${si}">
@@ -260,10 +269,12 @@
         });
         renderTrend();
       };
+      // Current value a select represents when unchanged ("" for pending).
+      const currentVal = (c) => (c.letter ? model.scale.normalizeLetter(c.grade) : "");
       view.querySelectorAll(".ug-select").forEach((sel) => {
         sel.addEventListener("change", () => {
           const c = model.courses.find((x) => x.id === sel.dataset.id);
-          if (sel.value === model.scale.normalizeLetter(c.grade)) delete overrides[sel.dataset.id];
+          if (sel.value === currentVal(c) || sel.value === "") delete overrides[sel.dataset.id];
           else overrides[sel.dataset.id] = sel.value;
           sel.classList.toggle("is-changed", !!overrides[sel.dataset.id]);
           recompute();
@@ -273,7 +284,7 @@
         Object.keys(overrides).forEach((k) => delete overrides[k]);
         view.querySelectorAll(".ug-select").forEach((sel) => {
           const c = model.courses.find((x) => x.id === sel.dataset.id);
-          sel.value = model.scale.normalizeLetter(c.grade);
+          sel.value = currentVal(c);
           sel.classList.remove("is-changed");
         });
         recompute();
@@ -313,13 +324,24 @@
           return;
         }
         lastPlan = plan;
-        // Subjects NOT used in this plan but still improvable — swap-in options.
+        // Subjects NOT used in this plan but still improvable — with the exact
+        // impact of raising each one to A+: now grade, target, resulting CGPA.
+        const cur = plan.current;
         const usedCodes = new Set(plan.steps.map((s) => s.code));
-        const alts = A().recommendations(model).filter((r) => !usedCodes.has(r.code)).slice(0, 3);
+        const alts = A().recommendations(model)
+          .filter((r) => !usedCodes.has(r.code))
+          .slice(0, 4)
+          .map((r) => {
+            const after = A().cgpa(model, { [r.id]: "A+" });
+            return { ...r, after: A().round2(after), gain: A().round2(after - cur) };
+          });
         out.innerHTML = `
           <div class="ug-ok">Reach <b>${fmt(plan.resultCgpa)}</b> by improving these ${plan.steps.length} subject${plan.steps.length > 1 ? "s" : ""} — get at least the grade shown:</div>
           <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
-          ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Or swap in one of these instead:</span>${alts.map((r) => `<span class="ug-alt"><b class="ug-code">${esc(r.code)}</b> ${esc(r.title)} <b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></span>`).join("")}</div>` : ""}
+          ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Other subjects worth improving <small>(each row = that one retaken to A+)</small></span>
+            <table class="ug-alttable"><thead><tr><th>Subject</th><th>Now</th><th>→</th><th>CGPA</th></tr></thead><tbody>
+            ${alts.map((r) => `<tr><td><b class="ug-code">${esc(r.code)}</b> <span class="ug-tt">${esc(r.title)}</span></td><td class="ctr"><b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></td><td class="ctr"><b class="ug-badge ug-badge--ok">A+</b></td><td class="ctr">${fmt(r.after)} <span class="ug-lift">+${r.gain.toFixed(2)}</span></td></tr>`).join("")}
+            </tbody></table></div>` : ""}
           <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan as PDF</button>`;
       };
       view.querySelector("[data-plan]").addEventListener("click", run);

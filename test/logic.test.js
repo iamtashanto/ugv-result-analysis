@@ -130,6 +130,16 @@ const recs2 = Analysis.recommendations(model2);
 eq("recs exclude COMPETENT/I", recs2.every((r) => ["F", "B"].includes(r.grade)), true);
 eq("only the F and B are improvable", recs2.length, 2);
 
+// COMPETENT (pass) and I (incomplete) are excluded from GPA entirely
+eq("GPA credits exclude COMPETENT+I", Analysis.weighted(model2.courses, scale2).credits, 6);
+eq("CGPA counts only F(0) and B(3.0)", Analysis.cgpa(model2), 1.5);
+eq("COMPETENT classed as pass", scale2.gradeKind("COMPETENT"), "pass");
+eq("I classed as incomplete", scale2.gradeKind("I"), "incomplete");
+// Simulating the Incomplete course as A+ makes it count
+eq("override I->A+ counts it", Analysis.cgpa(model2, { "0:2": "A+" }), Analysis.round2((0 + 9 + 12) / 9));
+// ungradedCourses (simulatable) = the Incomplete one, not COMPETENT
+eq("ungraded = incomplete only", Analysis.ungradedCourses(model2).map((c) => c.code).join(","), "INC1");
+
 const plan2 = Analysis.planForTarget(model2, 3.0);
 const usesOnlyLetters = plan2.steps.every((s) => GradeScale.GRADE_ORDER.includes(s.toGrade));
 eq("plan never targets COMPETENT", usesOnlyLetters, true);

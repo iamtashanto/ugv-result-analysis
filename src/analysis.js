@@ -24,25 +24,34 @@
           gpa: c.gpa,
           graded: c.graded,
           point: c.graded ? scale.pointFor(c.grade) : null,
-          // Standard letter grade (A+…F) => can be simulated / improved.
-          // COMPETENT, I (Incomplete), W etc. are locked pass/fail markers.
-          letter: c.graded && scale.isLetter(c.grade),
+          // Grade classification drives everything downstream:
+          //   letter     -> counts in GPA, editable, improvable
+          //   incomplete -> "I", exam not taken: non-GPA but editable/simulatable
+          //   pass       -> COMPETENT etc.: non-GPA, locked
+          //   blank      -> empty: non-GPA, editable
+          kind: scale.gradeKind(c.grade),
+          letter: scale.gradeKind(c.grade) === "letter",
+          // Editable in the simulator: real grades and not-yet-taken courses.
+          editable: scale.gradeKind(c.grade) === "letter" || scale.gradeKind(c.grade) === "incomplete" || scale.gradeKind(c.grade) === "blank",
         });
       });
     });
     return { parsed, courses, scale };
   }
 
-  // Credit-weighted average over graded courses with a known point value.
-  // `overrides` maps course id -> letter grade to substitute.
+  // Credit-weighted average. Only standard letter grades (A+…F) count toward
+  // GPA — COMPETENT / I (Incomplete) / blank are excluded from both numerator
+  // and denominator. `overrides` maps course id -> letter grade to substitute
+  // (used for what-if and simulating not-yet-taken courses).
   function weighted(courses, scale, overrides) {
     let totCredit = 0;
     let totPoints = 0;
     courses.forEach((c) => {
       if (c.credit <= 0) return;
       const letter = overrides && overrides[c.id] != null ? overrides[c.id] : c.grade;
+      if (!scale.isLetter(letter)) return; // non-GPA (pass/incomplete/blank)
       const point = scale.pointFor(letter);
-      if (point == null) return; // ungraded / in-progress excluded
+      if (point == null) return;
       totCredit += c.credit;
       totPoints += c.credit * point;
     });
@@ -155,8 +164,12 @@
     };
   }
 
+  // Not-yet-final courses that can still earn a real grade: "I" (Incomplete)
+  // and blank entries. Excludes COMPETENT-style pass markers (already done).
   function ungradedCourses(model) {
-    return model.courses.filter((c) => !c.graded && c.credit > 0);
+    return model.courses.filter(
+      (c) => c.credit > 0 && (c.kind === "incomplete" || c.kind === "blank")
+    );
   }
 
   // Project CGPA assuming every currently-ungraded course earns `letter`.
