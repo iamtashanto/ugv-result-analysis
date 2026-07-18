@@ -236,6 +236,8 @@
       });
 
       const baseCgpa = A().cgpa(model);
+      const baseSem = {};
+      A().semesterGpas(model).forEach((s) => (baseSem[s.index] = s.gpa));
       const recompute = () => {
         const now = A().cgpa(model, overrides);
         q('[data-live="cgpa"]').textContent = fmt(now);
@@ -243,10 +245,18 @@
         const dEl = q('[data-live="delta"]');
         dEl.textContent = (d >= 0 ? "▲ +" : "▼ ") + d.toFixed(2);
         dEl.className = "ug-delta " + (Math.abs(d) < 0.005 ? "" : d > 0 ? "up" : "down");
-        // Live per-semester GPA in each header row.
+        // Live per-semester GPA in each header row: "GPA 3.11" normally, and
+        // "GPA 3.11 → 3.25" (coloured) when that semester has a simulated change.
         A().semesterGpas(model, overrides).forEach((s) => {
           const cell = view.querySelector(`[data-semgpa="${s.index}"]`);
-          if (cell) cell.textContent = "GPA " + fmt(s.gpa);
+          if (!cell) return;
+          const base = baseSem[s.index];
+          if (Math.abs(s.gpa - base) > 0.005) {
+            const up = s.gpa > base;
+            cell.innerHTML = `GPA ${fmt(base)} <b class="${up ? "ug-up" : "ug-down"}">→ ${fmt(s.gpa)}</b>`;
+          } else {
+            cell.innerHTML = `GPA <b>${fmt(s.gpa)}</b>`;
+          }
         });
         renderTrend();
       };
