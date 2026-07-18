@@ -281,6 +281,7 @@
       const presets = [3.0, 3.25, 3.5, 3.75].filter((p) => p > cur + 0.001);
       const CAPS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C"];
       let excludedPlanIds = new Set();
+      let forcedPlanIds = new Set();
       
       view.innerHTML = `
         <div class="ug-targetbar">
@@ -294,9 +295,49 @@
         </div>
         ${presets.length ? `<div class="ug-presets">${presets.map((p) => `<button class="ug-chip" data-preset="${p}">${p.toFixed(2)}</button>`).join("")}</div>` : ""}
         <p class="ug-note">Current CGPA <b>${fmt(cur)}</b>. The planner assumes each retaken subject reaches the grade above, then shows how many subjects — and the minimum grade in each — you need.</p>
+        
+        <div class="ug-search" style="margin-top: 12px;"><i class="bi bi-search"></i><input type="search" placeholder="Search to manually add subject..." data-target-search></div>
+        <div class="ug-search-results" data-target-results hidden></div>
+        
         <div data-planout></div>`;
 
       const capGrade = () => view.querySelector("[data-cap]").value;
+
+      const searchInput = view.querySelector("[data-target-search]");
+      const searchRes = view.querySelector("[data-target-results]");
+      
+      searchInput.addEventListener("input", () => {
+         const term = searchInput.value.trim().toLowerCase();
+         if (!term) { searchRes.hidden = true; searchRes.innerHTML = ""; return; }
+         
+         const maxPoint = model.scale.pointFor(capGrade());
+         const matches = model.courses.filter(c => {
+            if (excludedPlanIds.has(c.id) || forcedPlanIds.has(c.id)) return false;
+            const isLetter = c.letter && c.point != null && c.point < maxPoint;
+            const isIncomplete = c.kind === "incomplete";
+            if (!(isLetter || isIncomplete) || c.credit <= 0) return false;
+            return (c.code + " " + c.title).toLowerCase().includes(term);
+         }).slice(0, 5);
+         
+         if (matches.length) {
+            searchRes.innerHTML = `<ul class="ug-recs" style="margin-top: 8px; margin-bottom: 12px;">` + matches.map(c => 
+               `<li><span class="ug-code">${esc(c.code)}</span><span class="ug-recname">${esc(c.title)}</span><button class="ug-btn" style="padding: 2px 8px; font-size: 0.8rem;" data-force-add="${esc(c.id)}">Add</button></li>`
+            ).join("") + `</ul>`;
+            
+            searchRes.querySelectorAll("[data-force-add]").forEach(btn => {
+               btn.addEventListener("click", (e) => {
+                   forcedPlanIds.add(e.currentTarget.dataset.forceAdd);
+                   searchInput.value = "";
+                   searchRes.hidden = true;
+                   run();
+               });
+            });
+            searchRes.hidden = false;
+         } else {
+            searchRes.innerHTML = `<p class="ug-note" style="margin-top: 8px;">No matching improvable subjects found.</p>`;
+            searchRes.hidden = false;
+         }
+      });
 
       const run = () => {
         const t = parseFloat(view.querySelector("[data-target]").value);
@@ -305,14 +346,14 @@
         if (isNaN(t)) { out.innerHTML = ""; return; }
         const cap = capGrade();
         const maxPoint = model.scale.pointFor(cap);
-        const opts = { maxPoint, excludeIds: Array.from(excludedPlanIds) };
+        const opts = { maxPoint, excludeIds: Array.from(excludedPlanIds), forceIds: Array.from(forcedPlanIds) };
         const plan = A().planForTarget(model, t, opts);
         
-        let resetBtnHtml = excludedPlanIds.size > 0 
-          ? `<div style="margin-top: 12px; text-align: center;"><button class="ug-btn ug-btn--ghost" data-reset-exclude><i class="bi bi-arrow-counterclockwise"></i> Include all removed subjects</button></div>` 
+        let resetBtnHtml = excludedPlanIds.size > 0 || forcedPlanIds.size > 0
+          ? `<div style="margin-top: 12px; text-align: center;"><button class="ug-btn ug-btn--ghost" data-reset-exclude><i class="bi bi-arrow-counterclockwise"></i> Reset manual changes</button></div>` 
           : "";
 
-        if (plan.alreadyMet) {
+        if (plan.alreadyMet && forcedPlanIds.size === 0) {
           out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}). Aim higher!</div>${resetBtnHtml}`;
           bindReset(out);
           return;
@@ -325,7 +366,7 @@
         
         const usedCodes = new Set(plan.steps.map((s) => s.code));
         const alts = A().recommendations(model, opts)
-          .filter((r) => !usedCodes.has(r.code) && !excludedPlanIds.has(r.id))
+          .filter((r) => !usedCodes.has(r.code) && !excludedPlanIds.has(r.id) && !forcedPlanIds.has(r.id))
           .slice(0, 4)
           .map((r) => {
             const after = A().cgpa(model, { [r.id]: cap });
@@ -337,7 +378,7 @@
         
         out.innerHTML = `
           <div class="ug-ok">Improve <b>${plan.steps.length}</b> subject${plan.steps.length > 1 ? "s" : ""} to reach <b>${fmt(plan.resultCgpa)}</b> — get at least the grade shown in each:</div>
-          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span><button class="ug-icon" style="margin-left: 8px; font-size: 1.2rem; color: #888;" data-exclude="${esc(s.id)}" title="Remove this subject and recalculate">&times;</button></li>`).join("")}</ol>
+          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em>${forcedPlanIds.has(s.id) ? ' <span class="ug-badge ug-badge--ok" style="font-size: 0.65em;">Added</span>' : ''}</span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span><button class="ug-icon" style="margin-left: 8px; font-size: 1.2rem; color: #888;" data-exclude="${esc(s.id)}" title="Remove this subject and recalculate">&times;</button></li>`).join("")}</ol>
           ${resetBtnHtml}
           ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Other subjects worth improving <small>(each row = that one retaken to ${esc(cap)})</small></span>
             <table class="ug-alttable"><thead><tr><th>Subject</th><th>Now</th><th>→</th><th>CGPA</th></tr></thead><tbody>
@@ -347,7 +388,12 @@
           
         out.querySelectorAll("[data-exclude]").forEach(btn => {
            btn.addEventListener("click", (e) => {
-               excludedPlanIds.add(e.currentTarget.dataset.exclude);
+               const id = e.currentTarget.dataset.exclude;
+               if (forcedPlanIds.has(id)) {
+                   forcedPlanIds.delete(id);
+               } else {
+                   excludedPlanIds.add(id);
+               }
                run();
            });
         });
@@ -359,6 +405,7 @@
         if (resetBtn) {
            resetBtn.addEventListener("click", () => {
                excludedPlanIds.clear();
+               forcedPlanIds.clear();
                run();
            });
         }

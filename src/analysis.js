@@ -103,6 +103,7 @@
   function planForTarget(model, targetCgpa, opts) {
     const maxPoint = (opts && opts.maxPoint) || MAX_POINT;
     const excludedIds = new Set((opts && opts.excludeIds) || []);
+    const forceIds = new Set((opts && opts.forceIds) || []);
     const scale = model.scale;
     const base = weighted(model.courses, scale);
     const current = base.gpa;
@@ -120,8 +121,13 @@
         const capacity = isNewCred ? c.credit * (maxPoint - targetCgpa) : c.credit * (maxPoint - oldP);
         return { course: c, capacity, isNewCred };
       })
-      .filter((x) => x.capacity > 1e-9)
-      .sort((a, b) => b.capacity - a.capacity);
+      .filter((x) => x.capacity > 1e-9 || forceIds.has(x.course.id))
+      .sort((a, b) => {
+         const aForce = forceIds.has(a.course.id);
+         const bForce = forceIds.has(b.course.id);
+         if (aForce !== bForce) return aForce ? -1 : 1;
+         return b.capacity - a.capacity;
+      });
 
     let maxPts = base.points;
     let maxCreds = base.credits;
@@ -133,7 +139,7 @@
 
     let deficit = targetCgpa * base.credits - base.points;
 
-    if (deficit <= 0) {
+    if (deficit <= 0 && forceIds.size === 0) {
       return { feasible: true, current: round2(current), target: targetCgpa, alreadyMet: true, steps: [], resultCgpa: round2(current), maxReachable: round2(maxReachable) };
     }
     if (targetCgpa > maxReachable + 1e-9) {
@@ -145,7 +151,8 @@
     const overrides = {};
 
     for (const item of improvable) {
-      if (deficit <= 1e-9) break;
+      const isForced = forceIds.has(item.course.id);
+      if (deficit <= 1e-9 && !isForced) break;
       const c = item.course;
       
       let chosen = null;
