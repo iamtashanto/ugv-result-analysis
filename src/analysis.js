@@ -55,10 +55,6 @@
     };
   }
 
-  // Credit-weighted average. Only standard letter grades (A+…F) count toward
-  // GPA — COMPETENT / I (Incomplete) / blank are excluded from both numerator
-  // and denominator. `overrides` maps course id -> letter grade to substitute
-  // (used for what-if and simulating not-yet-taken courses).
   function weighted(courses, scale, overrides) {
     let totCredit = 0;
     let totPoints = 0;
@@ -68,7 +64,7 @@
       const counts =
         scale.isLetter(letter) ||
         (scale.countPass && scale.gradeKind(letter) === "pass" && scale.pointFor(letter) != null);
-      if (!counts) return; // incomplete / blank (and pass, unless countPass)
+      if (!counts) return;
       const point = scale.pointFor(letter);
       if (point == null) return;
       totCredit += c.credit;
@@ -91,8 +87,6 @@
     return Object.values(bySem).sort((a, b) => a.order - b.order);
   }
 
-  // Weakest-first list of improvable courses, ranked by CGPA ROI.
-  // gain = credit * (maxPoint - currentPoint) / totalCredits.
   function recommendations(model, opts) {
     const maxPoint = (opts && opts.maxPoint) || MAX_POINT;
     const base = weighted(model.courses, model.scale);
@@ -101,16 +95,11 @@
       .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
       .map((c) => ({
         ...c,
-        roi: (c.credit * (maxPoint - c.point)) / totalCredits, // max CGPA lift
+        roi: (c.credit * (maxPoint - c.point)) / totalCredits,
       }))
       .sort((a, b) => b.roi - a.roi);
   }
 
-  /**
-   * Target planner. Greedy over highest-capacity courses: how to reach
-   * `targetCgpa` with the fewest / lightest grade improvements.
-   * Returns { feasible, current, target, maxReachable, steps[], resultCgpa }.
-   */
   function planForTarget(model, targetCgpa, opts) {
     const maxPoint = (opts && opts.maxPoint) || MAX_POINT;
     const scale = model.scale;
@@ -118,8 +107,6 @@
     const totalCredits = base.credits;
     const current = base.gpa;
 
-    // Capacity of each improvable course, richest first. Only standard
-    // letter-graded courses are retakeable — pass/fail markers are skipped.
     const improvable = model.courses
       .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
       .map((c) => ({ course: c, capacity: c.credit * (maxPoint - c.point) }))
@@ -147,7 +134,6 @@
       const c = item.course;
       const needPerCredit = deficit / c.credit; // extra point-per-credit still needed
       const neededPoint = Math.min(maxPoint, c.point + needPerCredit);
-      // Smallest grade whose point >= neededPoint.
       let chosen = null;
       for (let i = grades.length - 1; i >= 0; i--) {
         const p = scale.pointFor(grades[i]);
@@ -183,15 +169,12 @@
     };
   }
 
-  // Not-yet-final courses that can still earn a real grade: "I" (Incomplete)
-  // and blank entries. Excludes COMPETENT-style pass markers (already done).
   function ungradedCourses(model) {
     return model.courses.filter(
       (c) => c.credit > 0 && (c.kind === "incomplete" || c.kind === "blank")
     );
   }
 
-  // Project CGPA assuming every currently-ungraded course earns `letter`.
   function scenario(model, letter, extraOverrides) {
     const overrides = Object.assign({}, extraOverrides);
     ungradedCourses(model).forEach((c) => (overrides[c.id] = letter));
@@ -199,7 +182,6 @@
     return { letter, cgpa: round2(w.gpa), credits: w.credits, pointPerCourse: model.scale.pointFor(letter) };
   }
 
-  // Grade counts + credits, ordered by the scale (best -> worst).
   function gradeDistribution(model) {
     const map = {};
     model.courses.forEach((c) => {
@@ -215,8 +197,6 @@
     );
   }
 
-  // "If you raised your weakest N subjects to `toGrade`, CGPA becomes…".
-  // Returns { cgpa, gain, courses:[{code,title,fromGrade}] }.
   function improveTop(model, n, toGrade) {
     const grade = toGrade || "A+";
     const picks = recommendations(model).slice(0, n);
@@ -231,10 +211,6 @@
     };
   }
 
-  /**
-   * GPA required in a future semester of `plannedCredits` credits to reach
-   * `targetCgpa`. Returns { requiredGpa, feasible, current, plannedCredits }.
-   */
   function requiredNextGpa(model, targetCgpa, plannedCredits) {
     const base = weighted(model.courses, model.scale);
     const pc = Number(plannedCredits) || 0;
@@ -250,7 +226,6 @@
     };
   }
 
-  // Flat CSV of every course + a CGPA summary row.
   function toCsv(model) {
     const esc = (v) => {
       const s = String(v == null ? "" : v);

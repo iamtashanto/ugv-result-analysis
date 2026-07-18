@@ -1,4 +1,3 @@
-/* UGV Result Analysis — injected panel UI (vanilla DOM). */
 (function (root) {
   "use strict";
 
@@ -13,7 +12,6 @@
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const fmt = (n) => (n == null || isNaN(n) ? "—" : Number(n).toFixed(2));
 
-  // ---- SVG trend chart of semester GPAs ---------------------------------
   function trendChart(points) {
     const W = 520, H = 180, pad = 34;
     const max = 4, min = 0;
@@ -34,15 +32,13 @@
     document.getElementById("ug-fab")?.remove();
 
     const overrides = {};
-    let lastPlan = null; // most recent feasible target plan, for PDF export
+    let lastPlan = null;
 
-    // Floating launcher
     const fab = el("button", "ug-fab", '<i class="bi bi-graph-up-arrow"></i> Analyze');
     fab.id = "ug-fab";
     fab.title = "UGV Result Analysis";
     document.body.appendChild(fab);
 
-    // Panel shell
     const panel = el("aside", "ug-panel");
     panel.id = "ug-panel";
     panel.innerHTML = `
@@ -70,7 +66,6 @@
       <footer class="ug-credit">Developed by <a href="https://tashanto.com" target="_blank" rel="noopener">Shanto · tashanto.com</a></footer>`;
     document.body.appendChild(panel);
 
-    // Follow the portal's own light/dark theme (body.dark), live.
     const syncTheme = () => {
       const dark = document.body.classList.contains("dark");
       panel.classList.toggle("ug-dark", dark);
@@ -85,7 +80,6 @@
     const close = () => panel.classList.remove("is-open");
     fab.addEventListener("click", open);
 
-    // --- Resizable width (drag the left edge; double-click to expand) -----
     const MINW = 340;
     const maxW = () => Math.round(window.innerWidth * 0.95);
     let savedW = parseInt(localStorage.getItem("ugv:panelW") || "0", 10);
@@ -145,7 +139,6 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
 
-    // ---- Trend view -----------------------------------------------------
     function renderTrend() {
       const sems = A().semesterGpas(model, overrides).filter((s) => s.credits > 0);
       const overall = A().weighted(model.courses, model.scale, overrides);
@@ -176,16 +169,10 @@
         <div class="ug-dist">${dist.map((d) => `<div class="ug-distrow"><span class="ug-distg ug-distg--${cls(d.grade)}">${esc(d.grade)}</span><span class="ug-distbar"><i style="width:${(d.count / max) * 100}%"></i></span><span class="ug-distn">${d.count}</span></div>`).join("")}</div>`;
     }
 
-    // ---- What-If view ---------------------------------------------------
     function renderWhatIf() {
       const view = q('[data-view="whatif"]');
       const grades = model.scale.letterGrades();
 
-      // Grade cell:
-      //   letter grade      -> dropdown, current grade selected
-      //   incomplete/blank  -> dropdown defaulting to "not taken", so the user
-      //                        can simulate a grade for an exam they'll sit
-      //   pass (COMPETENT)  -> locked chip (non-GPA, already passed)
       const gradeCell = (c) => {
         if (c.letter) {
           const opts = grades
@@ -194,7 +181,6 @@
           return `<select class="ug-select" data-id="${c.id}">${opts}</select>`;
         }
         if (c.editable) {
-          // Incomplete / not-yet-taken — offer a grade to project.
           const label = c.kind === "incomplete" ? "I · not taken" : "not taken";
           const opts = grades.map((g) => `<option value="${g}">${g}</option>`).join("");
           return `<select class="ug-select ug-select--pending" data-id="${c.id}"><option value="" selected>${label}</option>${opts}</select>`;
@@ -202,7 +188,6 @@
         return `<span class="ug-lock" title="Pass / non-GPA course (not counted)">${esc(c.grade || "—")}</span>`;
       };
 
-      // Rows grouped under a per-semester header (single line: label + GPA).
       const rows = model.parsed.semesters
         .map((sem, si) => {
           const semCourses = model.courses.filter((c) => c.semIndex === si && c.credit > 0);
@@ -240,7 +225,6 @@
           tr.hidden = !hit;
           if (hit) shown[tr.dataset.sem] = true;
         });
-        // Hide a semester header when none of its courses match.
         view.querySelectorAll("tr.ug-semrow").forEach((tr) => {
           tr.hidden = !!term && !shown[tr.dataset.sem];
         });
@@ -256,8 +240,6 @@
         const dEl = q('[data-live="delta"]');
         dEl.textContent = (d >= 0 ? "▲ +" : "▼ ") + d.toFixed(2);
         dEl.className = "ug-delta " + (Math.abs(d) < 0.005 ? "" : d > 0 ? "up" : "down");
-        // Live per-semester GPA in each header row: "GPA 3.11" normally, and
-        // "GPA 3.11 → 3.25" (coloured) when that semester has a simulated change.
         A().semesterGpas(model, overrides).forEach((s) => {
           const cell = view.querySelector(`[data-semgpa="${s.index}"]`);
           if (!cell) return;
@@ -271,7 +253,6 @@
         });
         renderTrend();
       };
-      // Current value a select represents when unchanged ("" for pending).
       const currentVal = (c) => (c.letter ? model.scale.normalizeLetter(c.grade) : "");
       view.querySelectorAll(".ug-select").forEach((sel) => {
         sel.addEventListener("change", () => {
@@ -294,12 +275,10 @@
       recompute();
     }
 
-    // ---- Target view ----------------------------------------------------
     function renderTarget() {
       const view = q('[data-view="target"]');
       const cur = A().cgpa(model);
       const presets = [3.0, 3.25, 3.5, 3.75].filter((p) => p > cur + 0.001);
-      // Grades you might realistically get on a retake — default B+, as advised.
       const CAPS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C"];
       view.innerHTML = `
         <div class="ug-targetbar">
@@ -334,8 +313,6 @@
           out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable if retakes top out at <b>${esc(cap)}</b>. Max reachable this way is <b>${fmt(plan.maxReachable)}</b> — raise the assumed grade or lower the target.</div>`;
           return;
         }
-        // Subjects NOT in the plan but still improvable (to the assumed cap):
-        // shows current grade, target grade, and the resulting CGPA.
         const usedCodes = new Set(plan.steps.map((s) => s.code));
         const alts = A().recommendations(model, opts)
           .filter((r) => !usedCodes.has(r.code))

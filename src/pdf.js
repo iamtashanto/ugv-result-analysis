@@ -1,7 +1,3 @@
-/* UGV Result Analysis — printable grade sheet.
- * Opens a clean, print-optimized window; the browser's "Save as PDF" produces
- * the downloadable sheet (no bundled PDF library, no CSP headaches).
- */
 (function (root) {
   "use strict";
 
@@ -101,7 +97,6 @@
     </body></html>`;
   }
 
-  // Shared print shell used by both sheets.
   function shell(title, inner) {
     return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
