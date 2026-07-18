@@ -127,9 +127,11 @@
          const bForce = forceIds.has(b.course.id);
          if (aForce !== bForce) return aForce ? -1 : 1;
          
-         const aMand = a.course.point === 0 || a.isNewCred;
-         const bMand = b.course.point === 0 || b.isNewCred;
-         if (aMand !== bMand) return aMand ? -1 : 1;
+         if (a.isNewCred !== b.isNewCred) return a.isNewCred ? -1 : 1;
+         
+         const aFail = a.course.point === 0;
+         const bFail = b.course.point === 0;
+         if (aFail !== bFail) return aFail ? -1 : 1;
          
          return b.capacity - a.capacity;
       });

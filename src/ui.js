@@ -376,6 +376,10 @@
         plan.alts = alts;
         lastPlan = plan;
         
+        if (plan.feasible && plan.resultCgpa != null) {
+            view.querySelector("[data-target]").value = plan.resultCgpa.toFixed(2);
+        }
+        
         out.innerHTML = `
           <div class="ug-ok">Improve <b>${plan.steps.length}</b> subject${plan.steps.length > 1 ? "s" : ""} to reach <b>${fmt(plan.resultCgpa)}</b> — get at least the grade shown in each:</div>
           <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em>${forcedPlanIds.has(s.id) ? ' <span class="ug-badge ug-badge--ok" style="font-size: 0.65em;">Added</span>' : ''}</span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span><button class="ug-icon" style="margin-left: 8px; font-size: 1.2rem; color: #888;" data-exclude="${esc(s.id)}" title="Remove this subject and recalculate">&times;</button></li>`).join("")}</ol>
