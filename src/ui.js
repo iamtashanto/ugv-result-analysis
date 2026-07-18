@@ -280,6 +280,8 @@
       const cur = A().cgpa(model);
       const presets = [3.0, 3.25, 3.5, 3.75].filter((p) => p > cur + 0.001);
       const CAPS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C"];
+      let excludedPlanIds = new Set();
+      
       view.innerHTML = `
         <div class="ug-targetbar">
           <label>Target CGPA</label>
@@ -303,19 +305,27 @@
         if (isNaN(t)) { out.innerHTML = ""; return; }
         const cap = capGrade();
         const maxPoint = model.scale.pointFor(cap);
-        const opts = { maxPoint };
+        const opts = { maxPoint, excludeIds: Array.from(excludedPlanIds) };
         const plan = A().planForTarget(model, t, opts);
+        
+        let resetBtnHtml = excludedPlanIds.size > 0 
+          ? `<div style="margin-top: 12px; text-align: center;"><button class="ug-btn ug-btn--ghost" data-reset-exclude><i class="bi bi-arrow-counterclockwise"></i> Include all removed subjects</button></div>` 
+          : "";
+
         if (plan.alreadyMet) {
-          out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}). Aim higher!</div>`;
+          out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}). Aim higher!</div>${resetBtnHtml}`;
+          bindReset(out);
           return;
         }
         if (!plan.feasible) {
-          out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable if retakes top out at <b>${esc(cap)}</b>. Max reachable this way is <b>${fmt(plan.maxReachable)}</b> — raise the assumed grade or lower the target.</div>`;
+          out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable if retakes top out at <b>${esc(cap)}</b>. Max reachable this way is <b>${fmt(plan.maxReachable)}</b> — raise the assumed grade or lower the target.</div>${resetBtnHtml}`;
+          bindReset(out);
           return;
         }
+        
         const usedCodes = new Set(plan.steps.map((s) => s.code));
         const alts = A().recommendations(model, opts)
-          .filter((r) => !usedCodes.has(r.code))
+          .filter((r) => !usedCodes.has(r.code) && !excludedPlanIds.has(r.id))
           .slice(0, 4)
           .map((r) => {
             const after = A().cgpa(model, { [r.id]: cap });
@@ -324,15 +334,36 @@
         plan.capGrade = cap;
         plan.alts = alts;
         lastPlan = plan;
+        
         out.innerHTML = `
           <div class="ug-ok">Improve <b>${plan.steps.length}</b> subject${plan.steps.length > 1 ? "s" : ""} to reach <b>${fmt(plan.resultCgpa)}</b> — get at least the grade shown in each:</div>
-          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
+          <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span><button class="ug-icon" style="margin-left: 8px; font-size: 1.2rem; color: #888;" data-exclude="${esc(s.id)}" title="Remove this subject and recalculate">&times;</button></li>`).join("")}</ol>
+          ${resetBtnHtml}
           ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Other subjects worth improving <small>(each row = that one retaken to ${esc(cap)})</small></span>
             <table class="ug-alttable"><thead><tr><th>Subject</th><th>Now</th><th>→</th><th>CGPA</th></tr></thead><tbody>
             ${alts.map((r) => `<tr><td><b class="ug-code">${esc(r.code)}</b> <span class="ug-tt">${esc(r.title)}</span></td><td class="ctr"><b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></td><td class="ctr"><b class="ug-badge ug-badge--ok">${esc(cap)}</b></td><td class="ctr">${fmt(r.after)} <span class="ug-lift">+${r.gain.toFixed(2)}</span></td></tr>`).join("")}
             </tbody></table></div>` : ""}
           <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan (with suggestions) as PDF</button>`;
+          
+        out.querySelectorAll("[data-exclude]").forEach(btn => {
+           btn.addEventListener("click", (e) => {
+               excludedPlanIds.add(e.currentTarget.dataset.exclude);
+               run();
+           });
+        });
+        bindReset(out);
       };
+      
+      const bindReset = (out) => {
+        const resetBtn = out.querySelector("[data-reset-exclude]");
+        if (resetBtn) {
+           resetBtn.addEventListener("click", () => {
+               excludedPlanIds.clear();
+               run();
+           });
+        }
+      };
+
       view.querySelector("[data-plan]").addEventListener("click", run);
       view.querySelector("[data-cap]").addEventListener("change", run);
       view.querySelector("[data-target]").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });

@@ -102,22 +102,36 @@
 
   function planForTarget(model, targetCgpa, opts) {
     const maxPoint = (opts && opts.maxPoint) || MAX_POINT;
+    const excludedIds = new Set((opts && opts.excludeIds) || []);
     const scale = model.scale;
     const base = weighted(model.courses, scale);
-    const totalCredits = base.credits;
     const current = base.gpa;
 
     const improvable = model.courses
-      .filter((c) => c.letter && c.credit > 0 && c.point != null && c.point < maxPoint)
-      .map((c) => ({ course: c, capacity: c.credit * (maxPoint - c.point) }))
+      .filter((c) => {
+        if (excludedIds.has(c.id)) return false;
+        const isLetter = c.letter && c.point != null && c.point < maxPoint;
+        const isIncomplete = c.kind === "incomplete";
+        return (isLetter || isIncomplete) && c.credit > 0;
+      })
+      .map((c) => {
+        const oldP = c.point || 0;
+        const isNewCred = c.point == null;
+        const capacity = isNewCred ? c.credit * (maxPoint - targetCgpa) : c.credit * (maxPoint - oldP);
+        return { course: c, capacity, isNewCred };
+      })
+      .filter((x) => x.capacity > 1e-9)
       .sort((a, b) => b.capacity - a.capacity);
 
-    const maxReachable = totalCredits
-      ? (base.points + improvable.reduce((s, x) => s + x.capacity, 0)) / totalCredits
-      : 0;
+    let maxPts = base.points;
+    let maxCreds = base.credits;
+    improvable.forEach(item => {
+       if (item.isNewCred) { maxPts += item.course.credit * maxPoint; maxCreds += item.course.credit; }
+       else { maxPts += item.course.credit * (maxPoint - item.course.point); }
+    });
+    const maxReachable = maxCreds ? maxPts / maxCreds : 0;
 
-    const targetPoints = targetCgpa * totalCredits;
-    let deficit = targetPoints - base.points;
+    let deficit = targetCgpa * base.credits - base.points;
 
     if (deficit <= 0) {
       return { feasible: true, current: round2(current), target: targetCgpa, alreadyMet: true, steps: [], resultCgpa: round2(current), maxReachable: round2(maxReachable) };
@@ -126,37 +140,58 @@
       return { feasible: false, current: round2(current), target: targetCgpa, maxReachable: round2(maxReachable), steps: [] };
     }
 
-    const grades = scale.letterGrades(); // standard A+ … F only, best -> worst
+    const grades = scale.letterGrades();
     const steps = [];
     const overrides = {};
+
     for (const item of improvable) {
       if (deficit <= 1e-9) break;
       const c = item.course;
-      const needPerCredit = deficit / c.credit; // extra point-per-credit still needed
-      const neededPoint = Math.min(maxPoint, c.point + needPerCredit);
+      
       let chosen = null;
       for (let i = grades.length - 1; i >= 0; i--) {
         const p = scale.pointFor(grades[i]);
-        if (p != null && p >= neededPoint - 1e-9 && p > c.point) {
-          chosen = { grade: grades[i], point: p };
+        if (p == null || p > maxPoint) continue;
+        
+        const oldP = c.point || 0;
+        if (!item.isNewCred && p <= oldP) continue;
+        
+        const gain = item.isNewCred ? c.credit * (p - targetCgpa) : c.credit * (p - oldP);
+        
+        if (gain >= deficit - 1e-9) {
+          chosen = { grade: grades[i], point: p, gain };
           break;
         }
       }
-      if (!chosen) chosen = { grade: grades[0], point: scale.pointFor(grades[0]) };
-      const gain = c.credit * (chosen.point - c.point);
-      overrides[c.id] = chosen.grade;
-      deficit -= gain;
-      steps.push({
-        code: c.code,
-        title: c.title,
-        semLabel: c.semLabel,
-        credit: c.credit,
-        fromGrade: c.grade,
-        fromPoint: c.point,
-        toGrade: chosen.grade,
-        toPoint: chosen.point,
-        cgpaAfter: round2(cgpa(model, overrides)),
-      });
+      
+      if (!chosen) {
+         for (let i = 0; i < grades.length; i++) {
+           const p = scale.pointFor(grades[i]);
+           if (p != null && Math.abs(p - maxPoint) < 1e-9) {
+             const oldP = c.point || 0;
+             const gain = item.isNewCred ? c.credit * (p - targetCgpa) : c.credit * (p - oldP);
+             chosen = { grade: grades[i], point: p, gain };
+             break;
+           }
+         }
+      }
+      
+      if (chosen) {
+        overrides[c.id] = chosen.grade;
+        deficit -= chosen.gain;
+        steps.push({
+          id: c.id,
+          code: c.code,
+          title: c.title,
+          semLabel: c.semLabel,
+          credit: c.credit,
+          fromGrade: c.grade || "I",
+          fromPoint: c.point,
+          toGrade: chosen.grade,
+          toPoint: chosen.point,
+          cgpaAfter: round2(cgpa(model, overrides)),
+        });
+      }
     }
 
     return {
