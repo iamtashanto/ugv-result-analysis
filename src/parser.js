@@ -1,10 +1,3 @@
-/* UGV Result Analysis — DOM parser
- *
- * Reads the published results page. The page renders every course row with
- * stable class hooks (.results-course-code, .results-credit-badge,
- * .results-grade-badge, .results-gpa-value), so we parse by class rather than
- * by column position — resilient to column reordering.
- */
 (function (root) {
   "use strict";
 
@@ -20,7 +13,6 @@
     return el ? el.textContent.trim() : "";
   }
 
-  // Turn "8th", "1st Semester" etc. into a sortable integer.
   function semesterOrder(label) {
     const n = num(label);
     return n == null ? 999 : n;
@@ -34,13 +26,12 @@
     const gradeEl = tr.querySelector(".results-grade-badge");
     const unsetEl = tr.querySelector(".results-unset-label, .results-grade-badge--unset");
     let grade = gradeEl ? txt(gradeEl) : "";
-    // Treat placeholder glyphs / "not published" as ungraded.
     const isUnset = !!unsetEl || /^[-–—]*$/.test(grade) || /not|pending|await/i.test(grade);
     if (isUnset) grade = "";
 
     const gpa = num(txt(tr.querySelector(".results-gpa-value")));
 
-    if (!code && credit == null && !grade) return null; // spacer / header row
+    if (!code && credit == null && !grade) return null;
     return { code, title, credit: credit == null ? 0 : credit, grade, gpa, graded: !!grade };
   }
 
@@ -96,10 +87,6 @@
     );
   }
 
-  /**
-   * Parse the whole page. Also teaches `scale` every observed (grade, gpa)
-   * pair so downstream math matches the portal exactly.
-   */
   function parse(scale) {
     const cards = document.querySelectorAll(".results-semester-card");
     const semesters = [];

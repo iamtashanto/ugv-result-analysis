@@ -1,6 +1,3 @@
-/* UGV Result Analysis — GPA math, what-if simulation and target planning.
- * All functions are pure over a parsed model + a GradeScale.
- */
 (function (root) {
   "use strict";
 
@@ -8,7 +5,6 @@
   const round2 = (n) => Math.round(n * 100) / 100;
   const MAX_POINT = 4.0;
 
-  // Flatten semesters -> courses with stable ids and back-references.
   function buildModel(parsed, scale) {
     const courses = [];
     parsed.semesters.forEach((sem, si) => {
@@ -24,14 +20,8 @@
           gpa: c.gpa,
           graded: c.graded,
           point: c.graded ? scale.pointFor(c.grade) : null,
-          // Grade classification drives everything downstream:
-          //   letter     -> counts in GPA, editable, improvable
-          //   incomplete -> "I", exam not taken: non-GPA but editable/simulatable
-          //   pass       -> COMPETENT etc.: non-GPA, locked
-          //   blank      -> empty: non-GPA, editable
           kind: scale.gradeKind(c.grade),
           letter: scale.gradeKind(c.grade) === "letter",
-          // Editable in the simulator: real grades and not-yet-taken courses.
           editable: scale.gradeKind(c.grade) === "letter" || scale.gradeKind(c.grade) === "incomplete" || scale.gradeKind(c.grade) === "blank",
         });
       });
@@ -41,9 +31,6 @@
     return model;
   }
 
-  // We don't know for sure whether the portal counts COMPETENT-style pass
-  // grades in CGPA. It publishes its own CGPA, so try it both ways and keep
-  // whichever lands closer to the portal's number.
   function calibratePassCounting(model) {
     const rep = model.parsed.reportedCgpa;
     const scale = model.scale;

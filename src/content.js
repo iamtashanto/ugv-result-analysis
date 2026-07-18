@@ -1,7 +1,3 @@
-/* UGV Result Analysis — content entry point.
- * Waits for the results DOM, learns the grade scale, builds the model and
- * mounts the analysis panel.
- */
 (function (root) {
   "use strict";
 
@@ -14,11 +10,10 @@
     if (!parsed.semesters.length) return false;
     const model = NS.Analysis.buildModel(parsed, scale);
     NS.UI.mount(model);
-    root.__ugvResultModel = model; // handy for debugging / popup
+    root.__ugvResultModel = model;
     return true;
   }
 
-  // The page may hydrate slightly after document_idle; retry briefly.
   let tries = 0;
   const timer = setInterval(() => {
     if (init() || ++tries > 20) clearInterval(timer);
