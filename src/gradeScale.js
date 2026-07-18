@@ -48,6 +48,9 @@
     const learned = Object.create(null);
 
     return {
+      // When true, "pass" markers (COMPETENT etc.) with a known point count
+      // toward GPA. Auto-decided by calibration against the portal's own CGPA.
+      countPass: false,
       learn(letter, point) {
         const key = normalizeLetter(letter);
         const p = Number(point);

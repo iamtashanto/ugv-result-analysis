@@ -170,6 +170,13 @@
         <thead><tr><th>#</th><th>Code</th><th>Course</th><th>Semester</th><th>Cr</th><th>Now</th><th>Target</th><th>Running CGPA</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${plan.alts && plan.alts.length ? `
+      <h3 style="font-size:13px;margin:18px 0 4px;border-left:3px solid #16a34a;padding-left:8px;">Other subjects worth improving</h3>
+      <div class="sub" style="margin-bottom:6px;">Each row shows that single subject retaken to ${esc(plan.capGrade || "A+")} and the CGPA it would give on its own.</div>
+      <table>
+        <thead><tr><th>Code</th><th>Course</th><th>Now</th><th>Target</th><th>Resulting CGPA</th></tr></thead>
+        <tbody>${plan.alts.map((r) => `<tr><td class="code">${esc(r.code)}</td><td>${esc(r.title)}</td><td class="ctr"><span class="badge warn">${esc(r.grade)}</span></td><td class="ctr"><span class="badge ok">${esc(r.toGrade || plan.capGrade || "A+")}</span></td><td class="num">${r.after.toFixed(2)} (+${r.gain.toFixed(2)})</td></tr>`).join("")}</tbody>
+      </table>` : ""}
       <footer><span>UGV Result Analysis · developed by <a href="https://tashanto.com" style="color:#144d9b;text-decoration:none">tashanto.com</a> — planning aid only; retake rules follow your department.</span><span>${esc(now)}</span></footer>`;
     return shell(`UGV CGPA Plan — ${student.name || ""}`, inner);
   }

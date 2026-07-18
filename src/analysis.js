@@ -36,7 +36,36 @@
         });
       });
     });
-    return { parsed, courses, scale };
+    const model = { parsed, courses, scale };
+    calibratePassCounting(model);
+    return model;
+  }
+
+  // We don't know for sure whether the portal counts COMPETENT-style pass
+  // grades in CGPA. It publishes its own CGPA, so try it both ways and keep
+  // whichever lands closer to the portal's number.
+  function calibratePassCounting(model) {
+    const rep = model.parsed.reportedCgpa;
+    const scale = model.scale;
+    const hasPass = model.courses.some(
+      (c) => c.kind === "pass" && c.credit > 0 && scale.pointFor(c.grade) != null
+    );
+    if (rep == null || !hasPass) {
+      model.calibration = { reported: rep, applied: scale.countPass, auto: false };
+      return;
+    }
+    scale.countPass = false;
+    const without = weighted(model.courses, scale).gpa;
+    scale.countPass = true;
+    const withPass = weighted(model.courses, scale).gpa;
+    scale.countPass = Math.abs(withPass - rep) <= Math.abs(without - rep);
+    model.calibration = {
+      reported: rep,
+      withPass: round2(withPass),
+      withoutPass: round2(without),
+      applied: scale.countPass,
+      auto: true,
+    };
   }
 
   // Credit-weighted average. Only standard letter grades (A+…F) count toward
@@ -49,7 +78,10 @@
     courses.forEach((c) => {
       if (c.credit <= 0) return;
       const letter = overrides && overrides[c.id] != null ? overrides[c.id] : c.grade;
-      if (!scale.isLetter(letter)) return; // non-GPA (pass/incomplete/blank)
+      const counts =
+        scale.isLetter(letter) ||
+        (scale.countPass && scale.gradeKind(letter) === "pass" && scale.pointFor(letter) != null);
+      if (!counts) return; // incomplete / blank (and pass, unless countPass)
       const point = scale.pointFor(letter);
       if (point == null) return;
       totCredit += c.credit;

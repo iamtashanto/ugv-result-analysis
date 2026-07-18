@@ -145,6 +145,26 @@ const usesOnlyLetters = plan2.steps.every((s) => GradeScale.GRADE_ORDER.includes
 eq("plan never targets COMPETENT", usesOnlyLetters, true);
 eq("plan only improves letter-graded subjects", plan2.steps.every((s) => ["CSE1", "CSE2"].includes(s.code)), true);
 
+// Target planner respects a retake-grade cap (e.g. B+ = 3.25)
+const capPlan = Analysis.planForTarget(model, 2.8, { maxPoint: scale.pointFor("B+") });
+eq("capped plan feasible", capPlan.feasible, true);
+eq("capped plan never exceeds B+", capPlan.steps.every((s) => scale.pointFor(s.toGrade) <= 3.25 + 1e-9), true);
+
+// Auto-calibration: counting COMPETENT matches the portal CGPA better -> ON
+const scale3 = GradeScale.createScale();
+[["A+", 4.0], ["B", 3.0], ["F", 0.0], ["COMPETENT", 4.0]].forEach(([g, p]) => scale3.learn(g, p));
+const model3 = Analysis.buildModel(
+  { student: {}, reportedCgpa: 2.13, semesters: [ { label: "1st", order: 1, withheld: false, courses: [
+    { code: "F1", title: "f", credit: 3, grade: "F", gpa: 0, graded: true },
+    { code: "B1", title: "b", credit: 3, grade: "B", gpa: 3.0, graded: true },
+    { code: "T1", title: "t", credit: 2, grade: "COMPETENT", gpa: 4.0, graded: true },
+  ] } ] },
+  scale3
+);
+eq("calibration turns COMPETENT counting ON", model3.calibration.applied, true);
+eq("calibrated CGPA counts COMPETENT", Analysis.cgpa(model3), Analysis.round2(17 / 8)); // 2.125
+eq("calibration is auto", model3.calibration.auto, true);
+
 // improveTop: raising the weakest subjects to A+ lifts CGPA
 const pot = Analysis.improveTop(model2, 2, "A+");
 eq("improveTop returns 2 courses", pot.courses.length, 2);

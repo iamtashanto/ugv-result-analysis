@@ -151,6 +151,7 @@
       const overall = A().weighted(model.courses, model.scale, overrides);
       const recs = A().recommendations(model).slice(0, 5);
       const reported = model.parsed.reportedCgpa;
+      const cal = model.calibration || {};
       const view = q('[data-view="trend"]');
       view.innerHTML = `
         <div class="ug-stats">
@@ -158,7 +159,8 @@
           <div class="ug-stat"><span>Credits</span><b>${overall.credits}</b></div>
           <div class="ug-stat"><span>Semesters</span><b>${sems.length}</b></div>
         </div>
-        ${reported != null && Math.abs(reported - overall.gpa) > 0.01 ? `<p class="ug-note">Portal shows <b>${fmt(reported)}</b>; computed <b>${fmt(overall.gpa)}</b> — small gaps come from ungraded/withheld courses.</p>` : ""}
+        ${cal.auto ? `<p class="ug-note"><i class="bi bi-magic"></i> Auto-calibrated to your portal CGPA (<b>${fmt(cal.reported)}</b>): COMPETENT-type passes are <b>${cal.applied ? "counted" : "not counted"}</b> — that matched best (counted ${fmt(cal.withPass)} vs not ${fmt(cal.withoutPass)}).</p>` : ""}
+        ${reported != null && Math.abs(reported - overall.gpa) > 0.015 ? `<p class="ug-note">Portal shows <b>${fmt(reported)}</b>; computed <b>${fmt(overall.gpa)}</b> — remaining gap is from withheld/failed courses the portal may not count yet.</p>` : ""}
         <div class="ug-card">${trendChart(sems)}</div>
         <h4 class="ug-h4">Best subjects to improve <small>(highest CGPA lift)</small></h4>
         <ul class="ug-recs">${recs.map((r) => `<li><span class="ug-code">${esc(r.code)}</span><span class="ug-recname">${esc(r.title)}</span><span class="ug-badge ug-badge--warn">${esc(r.grade)}</span><span class="ug-lift">+${(r.roi).toFixed(3)}</span></li>`).join("") || "<li class=\"ug-empty\">No improvable graded subjects 🎉</li>"}</ul>
@@ -296,55 +298,66 @@
     function renderTarget() {
       const view = q('[data-view="target"]');
       const cur = A().cgpa(model);
-      const pot3 = A().improveTop(model, 3, "A+");
       const presets = [3.0, 3.25, 3.5, 3.75].filter((p) => p > cur + 0.001);
+      // Grades you might realistically get on a retake — default B+, as advised.
+      const CAPS = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C"];
       view.innerHTML = `
         <div class="ug-targetbar">
           <label>Target CGPA</label>
           <input type="number" class="ug-input" min="0" max="4" step="0.01" value="${(Math.min(4, cur + 0.2)).toFixed(2)}" data-target>
           <button class="ug-btn" data-plan>Plan</button>
         </div>
+        <div class="ug-caprow">
+          <label>On a retake, assume I can get up to</label>
+          <select class="ug-input" data-cap>${CAPS.map((g) => `<option value="${g}"${g === "B+" ? " selected" : ""}>${g}</option>`).join("")}</select>
+        </div>
         ${presets.length ? `<div class="ug-presets">${presets.map((p) => `<button class="ug-chip" data-preset="${p}">${p.toFixed(2)}</button>`).join("")}</div>` : ""}
-        <p class="ug-note">Current CGPA <b>${fmt(cur)}</b>. The planner shows the exact grade you need in each subject (the <em>minimum</em> that reaches your goal).</p>
-        ${pot3.courses.length ? `<div class="ug-pot"><i class="bi bi-stars"></i> Improving your weakest <b>${pot3.courses.length}</b> subject${pot3.courses.length > 1 ? "s" : ""} to A+ could lift CGPA to <b>${fmt(pot3.cgpa)}</b> <span class="ug-lift">(+${pot3.gain.toFixed(2)})</span>.</div>` : ""}
+        <p class="ug-note">Current CGPA <b>${fmt(cur)}</b>. The planner assumes each retaken subject reaches the grade above, then shows how many subjects — and the minimum grade in each — you need.</p>
         <div data-planout></div>`;
+
+      const capGrade = () => view.querySelector("[data-cap]").value;
 
       const run = () => {
         const t = parseFloat(view.querySelector("[data-target]").value);
         const out = view.querySelector("[data-planout]");
         lastPlan = null;
         if (isNaN(t)) { out.innerHTML = ""; return; }
-        const plan = A().planForTarget(model, t);
+        const cap = capGrade();
+        const maxPoint = model.scale.pointFor(cap);
+        const opts = { maxPoint };
+        const plan = A().planForTarget(model, t, opts);
         if (plan.alreadyMet) {
           out.innerHTML = `<div class="ug-ok">✅ Already at or above ${t.toFixed(2)} (current ${fmt(plan.current)}). Aim higher!</div>`;
           return;
         }
         if (!plan.feasible) {
-          out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable by improving existing subjects. Max reachable is <b>${fmt(plan.maxReachable)}</b> (all subjects → A+).</div>`;
+          out.innerHTML = `<div class="ug-bad">⚠️ ${t.toFixed(2)} isn't reachable if retakes top out at <b>${esc(cap)}</b>. Max reachable this way is <b>${fmt(plan.maxReachable)}</b> — raise the assumed grade or lower the target.</div>`;
           return;
         }
-        lastPlan = plan;
-        // Subjects NOT used in this plan but still improvable — with the exact
-        // impact of raising each one to A+: now grade, target, resulting CGPA.
-        const cur = plan.current;
+        // Subjects NOT in the plan but still improvable (to the assumed cap):
+        // shows current grade, target grade, and the resulting CGPA.
         const usedCodes = new Set(plan.steps.map((s) => s.code));
-        const alts = A().recommendations(model)
+        const alts = A().recommendations(model, opts)
           .filter((r) => !usedCodes.has(r.code))
           .slice(0, 4)
           .map((r) => {
-            const after = A().cgpa(model, { [r.id]: "A+" });
-            return { ...r, after: A().round2(after), gain: A().round2(after - cur) };
+            const after = A().cgpa(model, { [r.id]: cap });
+            return { code: r.code, title: r.title, grade: r.grade, toGrade: cap, after: A().round2(after), gain: A().round2(after - plan.current) };
           });
+        plan.capGrade = cap;
+        plan.alts = alts;
+        lastPlan = plan;
         out.innerHTML = `
-          <div class="ug-ok">Reach <b>${fmt(plan.resultCgpa)}</b> by improving these ${plan.steps.length} subject${plan.steps.length > 1 ? "s" : ""} — get at least the grade shown:</div>
+          <div class="ug-ok">Improve <b>${plan.steps.length}</b> subject${plan.steps.length > 1 ? "s" : ""} to reach <b>${fmt(plan.resultCgpa)}</b> — get at least the grade shown in each:</div>
           <ol class="ug-steps">${plan.steps.map((s) => `<li><span class="ug-code">${esc(s.code)}</span><span class="ug-recname">${esc(s.title)} <em>${esc(s.semLabel)}</em></span><span class="ug-move"><b class="ug-badge ug-badge--warn">${esc(s.fromGrade)}</b> <i class="bi bi-arrow-right"></i> <b class="ug-badge ug-badge--ok">Get ${esc(s.toGrade)}</b></span><span class="ug-lift">${fmt(s.cgpaAfter)}</span></li>`).join("")}</ol>
-          ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Other subjects worth improving <small>(each row = that one retaken to A+)</small></span>
+          ${alts.length ? `<div class="ug-alts"><span class="ug-alts__title">Other subjects worth improving <small>(each row = that one retaken to ${esc(cap)})</small></span>
             <table class="ug-alttable"><thead><tr><th>Subject</th><th>Now</th><th>→</th><th>CGPA</th></tr></thead><tbody>
-            ${alts.map((r) => `<tr><td><b class="ug-code">${esc(r.code)}</b> <span class="ug-tt">${esc(r.title)}</span></td><td class="ctr"><b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></td><td class="ctr"><b class="ug-badge ug-badge--ok">A+</b></td><td class="ctr">${fmt(r.after)} <span class="ug-lift">+${r.gain.toFixed(2)}</span></td></tr>`).join("")}
+            ${alts.map((r) => `<tr><td><b class="ug-code">${esc(r.code)}</b> <span class="ug-tt">${esc(r.title)}</span></td><td class="ctr"><b class="ug-badge ug-badge--warn">${esc(r.grade)}</b></td><td class="ctr"><b class="ug-badge ug-badge--ok">${esc(cap)}</b></td><td class="ctr">${fmt(r.after)} <span class="ug-lift">+${r.gain.toFixed(2)}</span></td></tr>`).join("")}
             </tbody></table></div>` : ""}
-          <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan as PDF</button>`;
+          <button class="ug-btn ug-btn--pdf ug-w100" data-act="planpdf"><i class="bi bi-file-earmark-pdf"></i> Export this plan (with suggestions) as PDF</button>`;
       };
       view.querySelector("[data-plan]").addEventListener("click", run);
+      view.querySelector("[data-cap]").addEventListener("change", run);
       view.querySelector("[data-target]").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
       view.querySelectorAll("[data-preset]").forEach((b) =>
         b.addEventListener("click", () => {
