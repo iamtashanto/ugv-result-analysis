@@ -126,6 +126,7 @@
          const aForce = forceIds.has(a.course.id);
          const bForce = forceIds.has(b.course.id);
          if (aForce !== bForce) return aForce ? -1 : 1;
+         if (a.isNewCred !== b.isNewCred) return a.isNewCred ? -1 : 1;
          return b.capacity - a.capacity;
       });
 
