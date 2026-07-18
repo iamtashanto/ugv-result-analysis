@@ -126,7 +126,11 @@
          const aForce = forceIds.has(a.course.id);
          const bForce = forceIds.has(b.course.id);
          if (aForce !== bForce) return aForce ? -1 : 1;
-         if (a.isNewCred !== b.isNewCred) return a.isNewCred ? -1 : 1;
+         
+         const aMand = a.course.point === 0 || a.isNewCred;
+         const bMand = b.course.point === 0 || b.isNewCred;
+         if (aMand !== bMand) return aMand ? -1 : 1;
+         
          return b.capacity - a.capacity;
       });
 
@@ -139,8 +143,9 @@
     const maxReachable = maxCreds ? maxPts / maxCreds : 0;
 
     let deficit = targetCgpa * base.credits - base.points;
+    const isMandatory = (item) => forceIds.has(item.course.id) || item.course.point === 0 || item.isNewCred;
 
-    if (deficit <= 0 && forceIds.size === 0) {
+    if (deficit <= 0 && !improvable.some(isMandatory)) {
       return { feasible: true, current: round2(current), target: targetCgpa, alreadyMet: true, steps: [], resultCgpa: round2(current), maxReachable: round2(maxReachable) };
     }
     if (targetCgpa > maxReachable + 1e-9) {
@@ -152,8 +157,7 @@
     const overrides = {};
 
     for (const item of improvable) {
-      const isForced = forceIds.has(item.course.id);
-      if (deficit <= 1e-9 && !isForced) break;
+      if (deficit <= 1e-9 && !isMandatory(item)) break;
       const c = item.course;
       
       let chosen = null;
